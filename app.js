@@ -37,7 +37,7 @@ const Button = ({ onClick, children, variant = "primary", className = "", disabl
   );
 };
 
-// 視覚化コンポーネント
+// テキスト用 視覚化コンポーネント
 const Visualizer = ({ inputText, result, algo }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -211,6 +211,147 @@ const Visualizer = ({ inputText, result, algo }) => {
   );
 };
 
+// 画像用 視覚化コンポーネント
+const ImageVisualizer = ({ grid, result }) => {
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [speed, setSpeed] = useState(500); // 画像は少し速めに
+  const timerRef = useRef(null);
+
+  const steps = result?.animationSteps || [];
+  const currentStep = steps[currentStepIndex] || {};
+
+  useEffect(() => {
+    if (isPlaying) {
+      timerRef.current = setInterval(() => {
+        setCurrentStepIndex(prev => {
+          if (prev >= steps.length - 1) {
+            setIsPlaying(false);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, speed);
+    } else {
+      clearInterval(timerRef.current);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [isPlaying, speed, steps.length]);
+
+  useEffect(() => {
+    setCurrentStepIndex(0);
+    setIsPlaying(false);
+  }, [result]);
+
+  // ピクセルのステータス判定 (処理済み、処理中、未処理)
+  const getPixelStatus = (r, c) => {
+    const flatIdx = r * 8 + c;
+    const { index, length } = currentStep;
+    
+    // 開始前
+    if (index === undefined) return 'pending';
+
+    if (flatIdx >= index && flatIdx < index + length) return 'active'; // 処理中
+    if (flatIdx < index) return 'done'; // 処理済み
+    return 'pending'; // 未処理
+  };
+
+  return (
+    <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-100 mb-6">
+       <div className="flex justify-between items-center mb-4">
+          <h3 className="font-bold text-indigo-800 flex items-center">
+            <span className="mr-2">🎬</span> 画像データのスキャン
+          </h3>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-indigo-600 font-medium">速度:</label>
+            <input 
+              type="range" 
+              min="100" 
+              max="2000" 
+              step="100" 
+              value={2100 - speed} 
+              onChange={(e) => setSpeed(2100 - Number(e.target.value))}
+              className="w-24 h-2 bg-indigo-200 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+       </div>
+
+       {/* コントロールボタン */}
+       <div className="flex justify-center gap-2 mb-4">
+          <Button onClick={() => setCurrentStepIndex(0)} variant="outline" size="sm" disabled={currentStepIndex === 0}>⏮</Button>
+          <Button onClick={() => setCurrentStepIndex(prev => Math.max(0, prev - 1))} variant="outline" size="sm" disabled={currentStepIndex === 0}>◀</Button>
+          <Button onClick={() => setIsPlaying(!isPlaying)} variant={isPlaying ? "secondary" : "primary"} size="sm" className="w-24">
+            {isPlaying ? "一時停止" : "再生 ▶"}
+          </Button>
+          <Button onClick={() => setCurrentStepIndex(prev => Math.min(steps.length - 1, prev + 1))} variant="outline" size="sm" disabled={currentStepIndex === steps.length - 1}>▶</Button>
+          <Button onClick={() => setCurrentStepIndex(steps.length - 1)} variant="outline" size="sm" disabled={currentStepIndex === steps.length - 1}>⏭</Button>
+       </div>
+
+       {/* プログレスバー */}
+       <div className="w-full bg-gray-200 rounded-full h-1.5 mb-6">
+          <div 
+            className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300" 
+            style={{ width: `${((currentStepIndex + 1) / Math.max(steps.length, 1)) * 100}%` }}
+          ></div>
+        </div>
+
+       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+         {/* グリッドビュー */}
+         <div className="flex flex-col items-center">
+           <div className="text-sm font-bold text-gray-700 mb-2">スキャン中 (左上から右へ)</div>
+           <div className="grid grid-cols-8 gap-1 bg-gray-300 p-1 border rounded shadow-sm">
+             {grid.map((row, rIdx) => (
+               row.map((cell, cIdx) => {
+                 const status = getPixelStatus(rIdx, cIdx);
+                 let borderClass = "border-gray-200";
+                 let ringClass = "";
+                 let opacityClass = "";
+                 
+                 if (status === 'active') {
+                   borderClass = "border-yellow-400 z-10";
+                   ringClass = "ring-2 ring-yellow-400 ring-offset-1";
+                 } else if (status === 'done') {
+                   borderClass = "border-indigo-200";
+                   opacityClass = "opacity-60"; // 処理済みは少し薄く
+                 }
+
+                 return (
+                   <div
+                     key={`${rIdx}-${cIdx}`}
+                     className={`w-6 h-6 sm:w-8 sm:h-8 border ${cell === 1 ? 'bg-black' : 'bg-white'} ${borderClass} ${ringClass} ${opacityClass} transition-all duration-200`}
+                   />
+                 );
+               })
+             ))}
+           </div>
+         </div>
+
+         {/* 情報ビュー */}
+         <div className="space-y-4">
+            <div className="bg-white p-3 rounded border border-gray-200 shadow-sm min-h-[80px]">
+              <div className="text-xs text-gray-500 font-bold mb-1">処理内容</div>
+              <div className="text-gray-800 font-medium leading-relaxed">
+                 {currentStep.description ? 
+                    currentStep.description
+                      .replace(/「0」/g, "「白(0)」")
+                      .replace(/「1」/g, "「黒(1)」") 
+                    : "開始待ち..."}
+              </div>
+            </div>
+
+            <div className="bg-gray-800 p-3 rounded text-green-400 font-mono text-sm h-40 overflow-y-auto shadow-inner">
+               <div className="text-xs text-gray-400 border-b border-gray-700 pb-1 mb-1">出力データ</div>
+               <span>{currentStep.currentEncoded ? currentStep.currentEncoded.slice(0, currentStep.currentEncoded.lastIndexOf(currentStep.outputChunk || "xyz")) : ""}</span>
+               {currentStep.outputChunk && (
+                  <span className="text-white bg-green-700 px-1 animate-pulse">{currentStep.outputChunk}</span>
+               )}
+            </div>
+         </div>
+       </div>
+    </div>
+  );
+};
+
 
 // 簡易棒グラフコンポーネント
 const SimpleBarChart = ({ data }) => {
@@ -291,6 +432,11 @@ const App = () => {
     setDecodeResult("");
     setCompareData([]);
   }, [inputText, algo]);
+  
+  // 画像グリッドが変わったら結果をリセット
+  useEffect(() => {
+    setImgResult(null);
+  }, [grid]);
 
   const handleCompress = () => {
     if (!inputText) return;
@@ -354,7 +500,8 @@ const App = () => {
       encoded: res.encoded,
       originalSize: originalBits,
       compressedSize: compressedCost,
-      ratio: (compressedCost / originalBits) * 100
+      ratio: (compressedCost / originalBits) * 100,
+      animationSteps: res.animationSteps // アニメーション用データを渡す
     });
   };
 
@@ -527,6 +674,7 @@ const App = () => {
 
         {activeTab === 'image' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+             {/* 左カラム：エディタ */}
              <Card title="白黒画像の作成 (8x8)">
                 <div className="flex flex-col items-center space-y-4">
                   <ImageEditor grid={grid} setGrid={setGrid} />
@@ -541,46 +689,52 @@ const App = () => {
                 </div>
              </Card>
 
+             {/* 右カラム：結果とビジュアライザー */}
              {imgResult && (
-               <Card title="圧縮結果分析">
-                 <div className="space-y-4">
-                   <div>
-                     <div className="text-sm font-bold text-gray-700">ビット列 (元データ):</div>
-                     <div className="text-xs font-mono bg-gray-100 p-2 rounded break-all tracking-widest text-gray-500">
-                       {imgResult.originalStr}
+               <div className="space-y-6">
+                 {/* 画像用ビジュアライザー */}
+                 <ImageVisualizer grid={grid} result={imgResult} />
+                 
+                 <Card title="圧縮結果分析">
+                   <div className="space-y-4">
+                     <div>
+                       <div className="text-sm font-bold text-gray-700">ビット列 (元データ):</div>
+                       <div className="text-xs font-mono bg-gray-100 p-2 rounded break-all tracking-widest text-gray-500">
+                         {imgResult.originalStr}
+                       </div>
+                     </div>
+                     <div>
+                       <div className="text-sm font-bold text-indigo-700">RLE圧縮データ:</div>
+                       <div className="text-lg font-mono bg-indigo-50 p-2 rounded break-all text-indigo-700 font-bold border border-indigo-200">
+                         {imgResult.encoded}
+                       </div>
+                       <div className="text-xs text-gray-500 mt-1">※「色(0/1) + 連続数」の形式</div>
+                     </div>
+                     
+                     <div className="bg-gray-50 p-4 rounded-lg">
+                       <div className="flex justify-between items-end mb-2">
+                         <span className="text-sm font-medium">データ量比較</span>
+                         <span className="text-2xl font-bold text-gray-800">{Math.round(imgResult.ratio)}%</span>
+                       </div>
+                       <div className="h-4 bg-gray-200 rounded-full overflow-hidden flex">
+                          <div className="h-full bg-blue-500" style={{ width: `${Math.min(imgResult.ratio, 100)}%` }}></div>
+                       </div>
+                       <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>圧縮後: {imgResult.compressedSize} (概算)</span>
+                          <span>元: {imgResult.originalSize} bits</span>
+                       </div>
+                     </div>
+                     
+                     <div className="text-sm bg-yellow-50 p-3 rounded border border-yellow-100 text-yellow-800">
+                       <span className="font-bold">考察:</span><br/>
+                       {imgResult.ratio < 100 ? 
+                         "同じ色が連続しているため、圧縮効果が出ています。FAXなどで利用される原理です。" :
+                         "色が頻繁に入れ替わるため、逆にデータ量が増えているか、効果が薄いです（市松模様などで確認しましょう）。"
+                       }
                      </div>
                    </div>
-                   <div>
-                     <div className="text-sm font-bold text-indigo-700">RLE圧縮データ:</div>
-                     <div className="text-lg font-mono bg-indigo-50 p-2 rounded break-all text-indigo-700 font-bold border border-indigo-200">
-                       {imgResult.encoded}
-                     </div>
-                     <div className="text-xs text-gray-500 mt-1">※「色(0/1) + 連続数」の形式</div>
-                   </div>
-                   
-                   <div className="bg-gray-50 p-4 rounded-lg">
-                     <div className="flex justify-between items-end mb-2">
-                       <span className="text-sm font-medium">データ量比較</span>
-                       <span className="text-2xl font-bold text-gray-800">{Math.round(imgResult.ratio)}%</span>
-                     </div>
-                     <div className="h-4 bg-gray-200 rounded-full overflow-hidden flex">
-                        <div className="h-full bg-blue-500" style={{ width: `${Math.min(imgResult.ratio, 100)}%` }}></div>
-                     </div>
-                     <div className="flex justify-between text-xs text-gray-500 mt-1">
-                        <span>圧縮後: {imgResult.compressedSize} (概算)</span>
-                        <span>元: {imgResult.originalSize} bits</span>
-                     </div>
-                   </div>
-                   
-                   <div className="text-sm bg-yellow-50 p-3 rounded border border-yellow-100 text-yellow-800">
-                     <span className="font-bold">考察:</span><br/>
-                     {imgResult.ratio < 100 ? 
-                       "同じ色が連続しているため、圧縮効果が出ています。FAXなどで利用される原理です。" :
-                       "色が頻繁に入れ替わるため、逆にデータ量が増えているか、効果が薄いです（市松模様などで確認しましょう）。"
-                     }
-                   </div>
-                 </div>
-               </Card>
+                 </Card>
+               </div>
              )}
           </div>
         )}
