@@ -3,7 +3,7 @@
  * Uses Babel Standalone for JSX transformation in browser
  */
 
-const { useState, useEffect, useMemo } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 // UI Components
 const Card = ({ children, title, className = "" }) => (
@@ -13,32 +13,209 @@ const Card = ({ children, title, className = "" }) => (
   </div>
 );
 
-const Button = ({ onClick, children, variant = "primary", className = "", disabled = false }) => {
-  const baseStyle = "px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1";
+const Button = ({ onClick, children, variant = "primary", className = "", disabled = false, size = "md" }) => {
+  const baseStyle = "rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 flex items-center justify-center";
+  const sizes = {
+    sm: "px-2 py-1 text-sm",
+    md: "px-4 py-2",
+  };
   const variants = {
     primary: "bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500",
     secondary: "bg-gray-100 hover:bg-gray-200 text-gray-700 focus:ring-gray-400",
     success: "bg-green-600 hover:bg-green-700 text-white focus:ring-green-500",
     outline: "border border-gray-300 text-gray-600 hover:bg-gray-50",
+    ghost: "text-gray-500 hover:bg-gray-100",
   };
   return (
     <button 
       onClick={onClick} 
       disabled={disabled}
-      className={`${baseStyle} ${variants[variant]} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}`}
+      className={`${baseStyle} ${sizes[size]} ${variants[variant]} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}`}
     >
       {children}
     </button>
   );
 };
 
-// 簡易棒グラフコンポーネント (Rechartsなしで実装)
+// 視覚化コンポーネント
+const Visualizer = ({ inputText, result, algo }) => {
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1000); // ms
+  const timerRef = useRef(null);
+
+  const steps = result?.animationSteps || [];
+  const currentStep = steps[currentStepIndex] || {};
+
+  // 再生制御
+  useEffect(() => {
+    if (isPlaying) {
+      timerRef.current = setInterval(() => {
+        setCurrentStepIndex(prev => {
+          if (prev >= steps.length - 1) {
+            setIsPlaying(false);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, speed);
+    } else {
+      clearInterval(timerRef.current);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [isPlaying, speed, steps.length]);
+
+  // 入力変更やアルゴリズム変更でリセット
+  useEffect(() => {
+    setCurrentStepIndex(0);
+    setIsPlaying(false);
+  }, [inputText, algo, result]);
+
+  // 入力文字列のハイライト表示
+  const renderInputString = () => {
+    const chars = inputText.split("");
+    return (
+      <div className="flex flex-wrap gap-1 font-mono text-lg mb-2 p-2 bg-gray-50 rounded border border-gray-200 overflow-x-auto">
+        {chars.map((char, idx) => {
+          let bgClass = "bg-white";
+          let borderClass = "border-gray-200";
+          
+          // 現在処理中の文字をハイライト
+          const activeIndex = currentStep.index;
+          const activeLen = currentStep.length;
+
+          if (activeIndex >= 0 && idx >= activeIndex && idx < activeIndex + activeLen) {
+            bgClass = "bg-yellow-100 scale-110 shadow-sm";
+            borderClass = "border-yellow-400 font-bold text-black";
+          } else if (activeIndex >= 0 && idx < activeIndex) {
+            bgClass = "bg-gray-200 text-gray-400"; // 処理済み
+          }
+
+          return (
+            <div key={idx} className={`w-8 h-8 flex items-center justify-center border rounded transition-all duration-200 ${bgClass} ${borderClass}`}>
+              {char}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-100">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-bold text-indigo-800 flex items-center">
+            <span className="mr-2">🔍</span> 圧縮プロセスの可視化
+          </h3>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-indigo-600 font-medium">速度:</label>
+            <input 
+              type="range" 
+              min="100" 
+              max="2000" 
+              step="100" 
+              value={2100 - speed} 
+              onChange={(e) => setSpeed(2100 - Number(e.target.value))}
+              className="w-24 h-2 bg-indigo-200 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+        </div>
+
+        {/* コントロールボタン */}
+        <div className="flex justify-center gap-2 mb-4">
+          <Button onClick={() => setCurrentStepIndex(0)} variant="outline" size="sm" disabled={currentStepIndex === 0}>⏮</Button>
+          <Button onClick={() => setCurrentStepIndex(prev => Math.max(0, prev - 1))} variant="outline" size="sm" disabled={currentStepIndex === 0}>◀</Button>
+          <Button onClick={() => setIsPlaying(!isPlaying)} variant={isPlaying ? "secondary" : "primary"} size="sm" className="w-24">
+            {isPlaying ? "一時停止" : "再生 ▶"}
+          </Button>
+          <Button onClick={() => setCurrentStepIndex(prev => Math.min(steps.length - 1, prev + 1))} variant="outline" size="sm" disabled={currentStepIndex === steps.length - 1}>▶</Button>
+          <Button onClick={() => setCurrentStepIndex(steps.length - 1)} variant="outline" size="sm" disabled={currentStepIndex === steps.length - 1}>⏭</Button>
+        </div>
+
+        {/* ステップ進行状況 */}
+        <div className="w-full bg-gray-200 rounded-full h-1.5 mb-6">
+          <div 
+            className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300" 
+            style={{ width: `${((currentStepIndex + 1) / Math.max(steps.length, 1)) * 100}%` }}
+          ></div>
+        </div>
+
+        {/* 処理内容の視覚化エリア */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 左：入力データのスキャン */}
+          <div>
+            <div className="text-xs text-gray-500 mb-1 font-bold">1. 入力データの読み取り</div>
+            {renderInputString()}
+            <div className="min-h-[60px] p-3 bg-white border border-gray-200 rounded text-sm text-gray-700 leading-relaxed whitespace-pre-line shadow-sm">
+              {currentStep.description || "開始待ち..."}
+            </div>
+          </div>
+
+          {/* 右：出力・辞書の状態 */}
+          <div className="space-y-4">
+             {/* アルゴリズムごとの補足表示 */}
+             {algo === 'huffman' && (
+                <div className="bg-white p-2 rounded border border-gray-200">
+                  <div className="text-xs text-gray-500 mb-1 font-bold">辞書参照</div>
+                  {currentStep.lookupChar ? (
+                    <div className="flex items-center justify-center gap-3">
+                      <div className="w-8 h-8 flex items-center justify-center border bg-gray-50 rounded font-mono">{currentStep.lookupChar}</div>
+                      <span className="text-gray-400">➞</span>
+                      <div className="font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">{currentStep.lookupCode}</div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400 text-center py-2">- 待機中 -</div>
+                  )}
+                </div>
+             )}
+
+             {algo === 'lzw' && (
+                <div className="bg-white p-2 rounded border border-gray-200">
+                  <div className="text-xs text-gray-500 mb-1 font-bold">辞書登録・検索</div>
+                  <div className="text-xs font-mono space-y-1">
+                     <div className="flex justify-between">
+                       <span>現在のパターン(w):</span>
+                       <span className="font-bold bg-yellow-50 px-1">{currentStep.w !== undefined ? `"${currentStep.w}"` : "-"}</span>
+                     </div>
+                     {currentStep.dictAdd && (
+                        <div className="flex justify-between text-indigo-600 font-bold animate-pulse">
+                          <span>新規登録:</span>
+                          <span>"{currentStep.dictAdd.str}" = {currentStep.dictAdd.code}</span>
+                        </div>
+                     )}
+                  </div>
+                </div>
+             )}
+
+             {/* 成長する出力データ */}
+             <div>
+                <div className="text-xs text-gray-500 mb-1 font-bold">2. 出力データ</div>
+                <div className="p-2 bg-gray-800 text-green-400 font-mono text-sm rounded h-24 overflow-y-auto break-all shadow-inner">
+                  {/* これまで確定した部分 */}
+                  <span>{currentStep.currentEncoded ? currentStep.currentEncoded.slice(0, currentStep.currentEncoded.lastIndexOf(currentStep.outputChunk || "xyz")) : ""}</span>
+                  {/* 最新の追加部分をハイライト */}
+                  {currentStep.outputChunk && (
+                    <span className="text-white bg-green-700 px-1 animate-pulse">
+                      {currentStep.outputChunk}
+                    </span>
+                  )}
+                  {/* まだの部分は表示しない */}
+                </div>
+             </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+
+// 簡易棒グラフコンポーネント
 const SimpleBarChart = ({ data }) => {
   if (!data || data.length === 0) return null;
-  
-  // 最大値を見つけてスケーリング
   const maxValue = Math.max(...data.map(d => d.value));
-  
   return (
     <div className="w-full space-y-3 mt-4">
       {data.map((d, idx) => (
@@ -47,7 +224,7 @@ const SimpleBarChart = ({ data }) => {
           <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden relative mx-2">
             <div 
               className={`h-full ${d.color || 'bg-blue-500'} transition-all duration-500`}
-              style={{ width: `${Math.max((d.value / maxValue) * 100, 2)}%` }} // 最小幅2%確保
+              style={{ width: `${Math.max((d.value / maxValue) * 100, 2)}%` }}
             ></div>
           </div>
           <div className="w-20 text-right font-mono text-gray-700">{d.displayValue}</div>
@@ -69,13 +246,13 @@ const ImageEditor = ({ grid, setGrid }) => {
 
   return (
     <div className="flex flex-col items-center">
-      <div className="grid grid-cols-8 gap-1 bg-gray-300 p-1 border rounded">
+      <div className="grid grid-cols-8 gap-1 bg-gray-300 p-1 border rounded shadow-inner">
         {grid.map((row, rIdx) => (
           row.map((cell, cIdx) => (
             <div
               key={`${rIdx}-${cIdx}`}
               onClick={() => togglePixel(rIdx, cIdx)}
-              className={`w-6 h-6 sm:w-8 sm:h-8 cursor-pointer border ${cell === 1 ? 'bg-black border-gray-800' : 'bg-white border-gray-200'}`}
+              className={`w-6 h-6 sm:w-8 sm:h-8 cursor-pointer border transition-colors duration-150 ${cell === 1 ? 'bg-black border-gray-800' : 'bg-white border-gray-200 hover:bg-gray-100'}`}
             />
           ))
         ))}
@@ -102,13 +279,19 @@ const App = () => {
 
   const logic = window.CompressionLogic;
 
-  // アルゴリズム情報取得
   const algoInfo = useMemo(() => {
     if(!logic || !logic[algo]) return {};
     return logic[algo].getDescription();
   }, [algo]);
 
-  // テキスト圧縮実行
+  // 入力が変わったら結果をリセット
+  useEffect(() => {
+    setCompressionResult(null);
+    setDecodeInput("");
+    setDecodeResult("");
+    setCompareData([]);
+  }, [inputText, algo]);
+
   const handleCompress = () => {
     if (!inputText) return;
     let res = null;
@@ -118,11 +301,10 @@ const App = () => {
     else if (algo === "lzw") res = logic.lzw.encode(inputText);
 
     setCompressionResult(res);
-    setDecodeInput(res.encoded); // 自動で復元欄に入力
-    setDecodeResult(""); // リセット
+    setDecodeInput(res.encoded);
+    setDecodeResult("");
   };
 
-  // テキスト復元実行
   const handleDecompress = () => {
     if (!decodeInput) return;
     let res = "";
@@ -130,7 +312,6 @@ const App = () => {
     if (algo === "rle") {
       res = logic.rle.decode(decodeInput);
     } else if (algo === "huffman") {
-      // Huffmanの場合は辞書が必要。直前の圧縮結果を利用するか、警告を出す
       if (compressionResult && compressionResult.serializedMap) {
         res = logic.huffman.decode(decodeInput, compressionResult.serializedMap);
       } else {
@@ -142,21 +323,14 @@ const App = () => {
     setDecodeResult(res);
   };
 
-  // 全アルゴリズム比較
   const handleCompare = () => {
     if (!inputText) return;
     const rleRes = logic.rle.encode(inputText);
     const huffRes = logic.huffman.encode(inputText);
     const lzwRes = logic.lzw.encode(inputText);
 
-    // 比較用に単位を揃える（bit換算）
-    // RLE: 簡易実装のため文字長だが、比較のため文字数*8bitとする
-    // Huffman: 計算されたビット数
-    // LZW: 計算されたビット数
-    // 元データ: 文字数 * 8bit
-
     const originalBits = inputText.length * 8;
-    const rleBits = rleRes.encodedLength * 8; // 簡易
+    const rleBits = rleRes.encodedLength * 8; 
     const huffBits = huffRes.encodedLength;
     const lzwBits = lzwRes.encodedLength;
 
@@ -168,18 +342,11 @@ const App = () => {
     ]);
   };
 
-  // 画像圧縮実行
   const handleImageCompress = () => {
-    // グリッドを文字列化 (00001111...)
     const flatStr = grid.flat().join("");
-    // RLEで圧縮
     const res = logic.rle.encode(flatStr);
     
-    // 比較データ作成
-    const originalBits = flatStr.length; // 画像は1pixel = 1bitとみなす（白黒）
-    // RLE結果は "0414" (0が4つ, 1が4つ) のような文字列。
-    // 文字列としては4文字だが、データとしては「数値」と「色」のペア。
-    // ここでは教育用に圧縮後データ長(文字数) * 4bit 程度と仮定して比較表示
+    const originalBits = flatStr.length; 
     const compressedCost = res.encoded.length * 4; 
 
     setImgResult({
@@ -193,7 +360,6 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800 font-sans pb-10">
-      {/* ヘッダー */}
       <header className="bg-indigo-600 text-white p-4 shadow-lg sticky top-0 z-10">
         <div className="container mx-auto flex justify-between items-center">
           <h1 className="text-xl md:text-2xl font-bold tracking-tight">データ圧縮体験アプリ</h1>
@@ -202,8 +368,6 @@ const App = () => {
       </header>
 
       <main className="container mx-auto p-4 md:p-6 max-w-5xl">
-        
-        {/* タブ切り替え */}
         <div className="flex space-x-2 mb-6 border-b border-gray-200">
           <button 
             className={`px-4 py-2 font-medium rounded-t-lg transition-colors ${activeTab === 'text' ? 'bg-white border-x border-t border-gray-200 text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
@@ -221,17 +385,14 @@ const App = () => {
 
         {activeTab === 'text' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* メイン操作エリア (左カラム) */}
             <div className="lg:col-span-2 space-y-6">
-              {/* 入力設定 */}
               <Card title="1. 入力とアルゴリズム選択">
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">アルゴリズム</label>
                     <select 
                       value={algo} 
-                      onChange={(e) => { setAlgo(e.target.value); setCompressionResult(null); setDecodeResult(""); setCompareData([]); }}
+                      onChange={(e) => setAlgo(e.target.value)}
                       className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                     >
                       <option value="rle">ランレングス圧縮 (RLE)</option>
@@ -265,14 +426,19 @@ const App = () => {
                 </div>
               </Card>
 
-              {/* 圧縮結果 */}
+              {/* ビジュアライザー (圧縮結果があるときのみ表示) */}
               {compressionResult && (
-                <Card title="2. 圧縮結果" className="border-indigo-100 ring-2 ring-indigo-50">
+                <Visualizer inputText={inputText} result={compressionResult} algo={algo} />
+              )}
+
+              {/* 圧縮結果詳細 */}
+              {compressionResult && (
+                <Card title="2. 最終結果データ" className="border-indigo-100 ring-2 ring-indigo-50">
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="bg-white p-3 rounded border">
                         <div className="text-xs text-gray-500 mb-1">圧縮データ</div>
-                        <div className="font-mono text-lg font-bold text-indigo-700 break-all">
+                        <div className="font-mono text-lg font-bold text-indigo-700 break-all leading-tight">
                           {compressionResult.encoded}
                         </div>
                       </div>
@@ -289,7 +455,6 @@ const App = () => {
                       </div>
                     </div>
 
-                    {/* ハフマンの場合の辞書表示 */}
                     {algo === "huffman" && (
                       <div className="mt-2 text-sm">
                         <div className="font-bold mb-1">ハフマン符号割り当て (辞書):</div>
@@ -306,22 +471,15 @@ const App = () => {
                 </Card>
               )}
 
-              {/* 比較グラフ */}
               {compareData.length > 0 && (
                 <Card title="圧縮率の比較">
                    <p className="text-sm text-gray-600 mb-2">入力: <span className="font-mono font-bold">{inputText}</span></p>
                    <SimpleBarChart data={compareData} />
-                   <p className="text-xs text-gray-500 mt-3">
-                     ※ データの内容によって、どのアルゴリズムが適しているかが変わります。<br/>
-                     例：繰り返しが多い→RLE、文字種が偏っている→ハフマン、長い繰り返しパターンがある→LZW
-                   </p>
                 </Card>
               )}
             </div>
 
-            {/* サイドエリア (復元・ステップ) */}
             <div className="space-y-6">
-              {/* 復元機能 */}
               <Card title="3. 復元の確認">
                 <div className="space-y-3">
                   <div>
@@ -350,7 +508,6 @@ const App = () => {
                 </div>
               </Card>
 
-              {/* アルゴリズムの解説 */}
               <Card title="アルゴリズムの特徴">
                  <div className="text-sm space-y-3">
                    <div>
@@ -368,16 +525,15 @@ const App = () => {
           </div>
         )}
 
-        {/* 画像モード */}
         {activeTab === 'image' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
              <Card title="白黒画像の作成 (8x8)">
                 <div className="flex flex-col items-center space-y-4">
                   <ImageEditor grid={grid} setGrid={setGrid} />
                   <div className="flex gap-2 w-full justify-center">
-                    <Button onClick={() => setGrid(Array(8).fill().map(() => Array(8).fill(0)))} variant="outline">クリア</Button>
-                    <Button onClick={() => setGrid(Array(8).fill().map((_, r) => Array(8).fill(0).map((_, c) => (r+c)%2)))} variant="outline">市松模様</Button>
-                    <Button onClick={() => setGrid(Array(8).fill().map((_, r) => Array(8).fill(r < 4 ? 0 : 1)))} variant="outline">上下分割</Button>
+                    <Button onClick={() => setGrid(Array(8).fill().map(() => Array(8).fill(0)))} variant="outline" size="sm">クリア</Button>
+                    <Button onClick={() => setGrid(Array(8).fill().map((_, r) => Array(8).fill(0).map((_, c) => (r+c)%2)))} variant="outline" size="sm">市松模様</Button>
+                    <Button onClick={() => setGrid(Array(8).fill().map((_, r) => Array(8).fill(r < 4 ? 0 : 1)))} variant="outline" size="sm">上下分割</Button>
                   </div>
                   <Button onClick={handleImageCompress} className="w-full">
                     ランレングス圧縮する

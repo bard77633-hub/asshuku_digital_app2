@@ -9,34 +9,46 @@ const CompressionLogic = {
   // ==========================================
   rle: {
     encode: (text) => {
-      if (!text) return { encoded: "", ratio: 0, steps: [] };
+      if (!text) return { encoded: "", ratio: 0, steps: [], animationSteps: [] };
       let encoded = "";
       let i = 0;
+      // ステップ表示用（静的リスト）
       const steps = [];
+      // アニメーション用（詳細ステップ）
+      const animationSteps = [];
       
       while (i < text.length) {
         let count = 1;
+        // 連続数を数える
         while (i + count < text.length && text[i] === text[i + count]) {
           count++;
         }
-        // 簡易的な表現: 文字 + 数 (例: A5)
-        // 実際の実装ではバイナリだが、学習用に見やすくする
-        const segment = text[i] + count;
+        
+        const char = text[i];
+        const segment = char + count;
         encoded += segment;
-        steps.push({ char: text[i], count: count, output: segment });
+        
+        // 静的リスト用
+        steps.push({ char, count, output: segment });
+
+        // アニメーション用: 処理中の範囲と結果を記録
+        animationSteps.push({
+          index: i,
+          length: count,
+          description: `「${char}」が ${count} 回連続しています`,
+          outputChunk: segment,
+          currentEncoded: encoded
+        });
+
         i += count;
       }
       
       const ratio = (encoded.length / text.length) * 100;
-      return { encoded, ratio, steps, originalLength: text.length, encodedLength: encoded.length };
+      return { encoded, ratio, steps, animationSteps, originalLength: text.length, encodedLength: encoded.length };
     },
     
     decode: (text) => {
-      // 形式: A5B3C1 のような 文字+数字 の繰り返しを想定
-      // 注意: 数字が2桁以上の場合や、数字自体が文字として含まれる場合の厳密なパースは
-      // この簡易実装では複雑になるため、正規表現で簡易パースする
       let decoded = "";
-      // 文字(数値以外)の後に数値が続くパターンを検索
       const regex = /([^0-9])([0-9]+)/g;
       let match;
       
@@ -60,7 +72,7 @@ const CompressionLogic = {
   // ==========================================
   huffman: {
     encode: (text) => {
-      if (!text) return { encoded: "", ratio: 0, table: [], tree: null };
+      if (!text) return { encoded: "", ratio: 0, table: [], tree: null, animationSteps: [] };
 
       // 1. 頻度集計
       const freq = {};
@@ -68,20 +80,17 @@ const CompressionLogic = {
         freq[char] = (freq[char] || 0) + 1;
       }
 
-      // 2. 優先度付きキュー（ソート済み配列で代用）の作成
-      // ノード構造: { char, freq, left, right }
+      // 2. 優先度付きキュー
       let queue = Object.keys(freq).map(char => ({ char, freq: freq[char], left: null, right: null }));
-      
-      // ステップ表示用
       const initialFreqTable = [...queue].sort((a, b) => b.freq - a.freq);
 
       // 3. ツリー構築
       while (queue.length > 1) {
-        queue.sort((a, b) => a.freq - b.freq); // 昇順ソート
+        queue.sort((a, b) => a.freq - b.freq);
         const left = queue.shift();
         const right = queue.shift();
         const newNode = {
-          char: null, // 内部ノード
+          char: null,
           freq: left.freq + right.freq,
           left,
           right
@@ -90,7 +99,7 @@ const CompressionLogic = {
       }
       const root = queue[0];
 
-      // 4. 符号割り当て (再帰探索)
+      // 4. 符号割り当て
       const codes = {};
       const generateCodes = (node, currentCode) => {
         if (!node) return;
@@ -102,36 +111,55 @@ const CompressionLogic = {
         generateCodes(node.right, currentCode + "1");
       };
       
-      // ルートのみの場合（例: "AAAA"）の特例処理
       if (root && root.char !== null) {
          generateCodes(root, "0");
       } else {
          generateCodes(root, "");
       }
 
-      // 5. エンコード
+      // 5. エンコードとアニメーションステップ作成
       let encoded = "";
-      for (let char of text) {
-        encoded += codes[char];
+      const animationSteps = [];
+      
+      // ステップ0: 辞書構築完了
+      animationSteps.push({
+        index: -1,
+        length: 0,
+        description: "頻度を分析し、各文字にビット列を割り当てました（辞書作成）。",
+        outputChunk: "",
+        currentEncoded: ""
+      });
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const code = codes[char];
+        encoded += code;
+
+        animationSteps.push({
+          index: i,
+          length: 1,
+          description: `「${char}」を辞書で変換 → ${code}`,
+          outputChunk: code,
+          currentEncoded: encoded,
+          lookupChar: char,
+          lookupCode: code
+        });
       }
 
-      // ビット長としての計算（Web表示用には01の文字列長をビット数とみなす）
-      // 比較用に、元のテキストは 8bit/文字 とする
       const originalBits = text.length * 8;
-      const encodedBits = encoded.length; // 0か1の数
+      const encodedBits = encoded.length; 
       const ratio = (encodedBits / originalBits) * 100;
-
-      // 辞書情報を文字列化して保存（復元用）
       const serializedMap = JSON.stringify(codes);
 
       return {
         encoded,
         ratio,
-        originalLength: originalBits, // bits
-        encodedLength: encodedBits, // bits
+        originalLength: originalBits, 
+        encodedLength: encodedBits, 
         map: codes,
         freqTable: initialFreqTable,
-        serializedMap
+        serializedMap,
+        animationSteps
       };
     },
 
@@ -139,7 +167,6 @@ const CompressionLogic = {
       if (!encodedText || !codeMapJSON) return "復元には辞書情報が必要です。";
       try {
         const codeMap = JSON.parse(codeMapJSON);
-        // codeMap: { "A": "0", "B": "101" } -> 逆引きマップを作成
         const reverseMap = {};
         Object.keys(codeMap).forEach(char => {
           reverseMap[codeMap[char]] = char;
@@ -172,10 +199,9 @@ const CompressionLogic = {
   // ==========================================
   lzw: {
     encode: (text) => {
-      if (!text) return { encoded: "", ratio: 0, steps: [] };
+      if (!text) return { encoded: "", ratio: 0, steps: [], animationSteps: [] };
 
-      // 辞書初期化 (ASCIIコード 0-255 を想定)
-      // Web表示用にわかりやすくするため、出力はカンマ区切りの数値列とする
+      // 辞書初期化
       const dict = {};
       for (let i = 0; i < 256; i++) {
         dict[String.fromCharCode(i)] = i;
@@ -185,56 +211,87 @@ const CompressionLogic = {
       const result = [];
       let dictSize = 256;
       const steps = [];
+      const animationSteps = [];
 
       for (let i = 0; i < text.length; i++) {
         const c = text[i];
         const wc = w + c;
+        
         if (dict.hasOwnProperty(wc)) {
+          // 辞書にある場合：現在のパターン w を拡張
+          const prevW = w;
           w = wc;
+          animationSteps.push({
+            index: i,
+            length: 1,
+            description: `「${wc}」は辞書にあります。次の文字へ。`,
+            w: prevW, // 前の状態
+            nextW: wc, // 更新後の状態
+            outputChunk: null, // 出力なし
+            dictAdd: null
+          });
         } else {
+          // 辞書にない場合：現在の w を出力し、wc を辞書登録
           result.push(dict[w]);
-          steps.push({ w, output: dict[w], add: wc, newCode: dictSize });
+          const outputCode = dict[w];
+          
+          steps.push({ w, output: outputCode, add: wc, newCode: dictSize });
+          
+          animationSteps.push({
+            index: i,
+            length: 1,
+            description: `「${wc}」は辞書にありません。\n1. 「${w}」のコード(${outputCode})を出力\n2. 「${wc}」を辞書(No.${dictSize})に登録\n3. 次の検索開始文字を「${c}」に設定`,
+            w: w,
+            nextW: c,
+            outputChunk: outputCode + ",", // 表示用
+            currentEncoded: result.join(","),
+            dictAdd: { str: wc, code: dictSize },
+            isOutputStep: true
+          });
+
           dict[wc] = dictSize++;
           w = String(c);
         }
       }
+      
       if (w !== "") {
         result.push(dict[w]);
-        steps.push({ w, output: dict[w], add: "-", newCode: "-" });
+        const outputCode = dict[w];
+        steps.push({ w, output: outputCode, add: "-", newCode: "-" });
+        animationSteps.push({
+          index: text.length, // 終了後
+          length: 0,
+          description: `残っている「${w}」のコード(${outputCode})を出力して終了`,
+          w: w,
+          nextW: "",
+          outputChunk: outputCode,
+          currentEncoded: result.join(","),
+          dictAdd: null,
+          isOutputStep: true
+        });
       }
 
-      // 結果を文字列化 (例: "65,66,256")
       const encodedStr = result.join(",");
-      
-      // サイズ計算:
-      // 元: 文字数 * 8bit
-      // 圧縮後: 数値の個数 * (最大辞書サイズに必要なビット数...簡易的に12bitとする) 
-      // ※Webアプリ上の表示としては「数値の配列の長さ」vs「文字数」などで比較するが、
-      // ここでは厳密さより「数値の羅列になった」ことの視覚化を優先。
-      // 比較指標として、単純に文字列表現の長さで比較するのは不公平なので、
-      // (配列要素数 * 12) bits と仮定する。
       const originalBits = text.length * 8;
-      const encodedBits = result.length * 12; // 平均的に12bitで収まると仮定
-      
+      const encodedBits = result.length * 12; 
       const ratio = (encodedBits / originalBits) * 100;
 
       return { 
         encoded: encodedStr, 
         ratio, 
         steps, 
-        originalLength: originalBits, // bits
-        encodedLength: encodedBits, // bits
+        animationSteps,
+        originalLength: originalBits, 
+        encodedLength: encodedBits, 
         isBits: true 
       };
     },
 
     decode: (text) => {
       if (!text) return "";
-      // カンマ区切り数値を配列に変換
       const compressed = text.split(",").map(Number);
       if (compressed.some(isNaN)) return "形式エラー: カンマ区切りの数値（例: 65,66,256）を入力してください";
 
-      // 辞書初期化
       const dict = {};
       for (let i = 0; i < 256; i++) {
         dict[i] = String.fromCharCode(i);
@@ -270,5 +327,4 @@ const CompressionLogic = {
   }
 };
 
-// ブラウザのグローバルスコープに公開
 window.CompressionLogic = CompressionLogic;
