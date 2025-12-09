@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>情報Ⅰ データの圧縮 学習アプリ</title>
+    
+    <!-- Tailwind CSS (Styling) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM (Core Library) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel Standalone (JSX support in browser) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        /* カスタムスクロールバーなどの微調整 */
+        body {
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- 圧縮アルゴリズムロジック (Pure JS) -->
+    <script src="logic.js"></script>
+    
+    <!-- React アプリケーション (JSX) -->
+    <!-- type="text/babel" によりブラウザ内で変換実行される -->
+    <script type="text/babel" src="app.js"></script>
+
+    <!-- 
+      【注意】
+      この構成はローカルファイル(file://)でも多くのブラウザで動作しますが、
+      Chromeなど一部の環境でセキュリティ制限（CORS）により外部jsファイルの読み込みがブロックされる場合があります。
+      その場合は、VS Codeの「Live Server」拡張機能などを使用するか、
+      app.jsの内容を直接このファイル内のscriptタグに記述してください。
+    -->
+</body>
+</html>

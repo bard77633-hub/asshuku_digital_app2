@@ -1,0 +1,5 @@
+{
+  "name": "Data Compression Learning App",
+  "description": "情報Ⅰ「データの圧縮」単元向け学習アプリ。RLE、ハフマン符号化、LZWの圧縮・復元体験とアルゴリズム比較が可能です。",
+  "requestFramePermissions": []
+}
