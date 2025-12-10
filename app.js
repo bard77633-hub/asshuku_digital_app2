@@ -678,12 +678,25 @@ const App = () => {
              <Card title="白黒画像の作成 (8x8)">
                 <div className="flex flex-col items-center space-y-4">
                   <ImageEditor grid={grid} setGrid={setGrid} />
-                  <div className="flex gap-2 w-full justify-center">
-                    <Button onClick={() => setGrid(Array(8).fill().map(() => Array(8).fill(0)))} variant="outline" size="sm">クリア</Button>
-                    <Button onClick={() => setGrid(Array(8).fill().map((_, r) => Array(8).fill(0).map((_, c) => (r+c)%2)))} variant="outline" size="sm">市松模様</Button>
-                    <Button onClick={() => setGrid(Array(8).fill().map((_, r) => Array(8).fill(r < 4 ? 0 : 1)))} variant="outline" size="sm">上下分割</Button>
+                  
+                  <div className="w-full">
+                    <div className="flex justify-between items-center mb-2">
+                       <p className="text-xs text-gray-500 font-bold">プリセット・生成:</p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 w-full">
+                      <Button onClick={() => setGrid(Array(8).fill().map(() => Array(8).fill(0)))} variant="outline" size="sm">クリア</Button>
+                      <Button onClick={() => setGrid(Array(8).fill().map(() => Array(8).fill(0).map(() => Math.random() > 0.5 ? 1 : 0)))} variant="outline" size="sm">ランダム</Button>
+                      <Button onClick={() => setGrid(Array(8).fill().map((_, r) => Array(8).fill(0).map((_, c) => (r+c)%2)))} variant="outline" size="sm">市松模様</Button>
+                      <Button onClick={() => setGrid(Array(8).fill().map((_, r) => Array(8).fill(0).map((_, c) => r % 2)))} variant="outline" size="sm">横縞</Button>
+                      <Button onClick={() => setGrid(Array(8).fill().map((_, r) => Array(8).fill(0).map((_, c) => c % 2)))} variant="outline" size="sm">縦縞</Button>
+                      <Button onClick={() => setGrid(Array(8).fill().map((_, r) => Array(8).fill(0).map((_, c) => (r >= 2 && r <= 5 && c >= 2 && c <= 5) ? 1 : 0)))} variant="outline" size="sm">四角形</Button>
+                      <Button onClick={() => setGrid(Array(8).fill().map((_, r) => Array(8).fill(r < 4 ? 0 : 1)))} variant="outline" size="sm">上下分割</Button>
+                      <Button onClick={() => setGrid(Array(8).fill().map((_, r) => Array(8).fill(0).map((_, c) => c < 4 ? 0 : 1)))} variant="outline" size="sm">左右分割</Button>
+                      <Button onClick={() => setGrid(Array(8).fill().map((_, r) => Array(8).fill(0).map((_, c) => (r === c || r+c === 7) ? 1 : 0)))} variant="outline" size="sm">バツ印</Button>
+                    </div>
                   </div>
-                  <Button onClick={handleImageCompress} className="w-full">
+
+                  <Button onClick={handleImageCompress} className="w-full mt-2">
                     ランレングス圧縮する
                   </Button>
                 </div>
