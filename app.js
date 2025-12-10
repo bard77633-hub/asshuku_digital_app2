@@ -191,7 +191,7 @@ const Visualizer = ({ inputText, result, algo }) => {
              {/* 成長する出力データ */}
              <div>
                 <div className="text-xs text-gray-500 mb-1 font-bold">2. 出力データ</div>
-                <div className="p-2 bg-gray-800 text-green-400 font-mono text-sm rounded h-24 overflow-y-auto break-all shadow-inner">
+                <div className="p-2 bg-gray-800 text-green-400 font-mono text-sm rounded h-24 overflow-y-auto shadow-inner break-all whitespace-pre-wrap">
                   {/* これまで確定した部分 */}
                   <span>{currentStep.currentEncoded ? currentStep.currentEncoded.slice(0, currentStep.currentEncoded.lastIndexOf(currentStep.outputChunk || "xyz")) : ""}</span>
                   {/* 最新の追加部分をハイライト */}
@@ -339,7 +339,7 @@ const ImageVisualizer = ({ grid, result }) => {
               </div>
             </div>
 
-            <div className="bg-gray-800 p-3 rounded text-green-400 font-mono text-sm h-40 overflow-y-auto shadow-inner">
+            <div className="bg-gray-800 p-3 rounded text-green-400 font-mono text-sm h-40 overflow-y-auto shadow-inner break-all whitespace-pre-wrap">
                <div className="text-xs text-gray-400 border-b border-gray-700 pb-1 mb-1">出力データ</div>
                <span>{currentStep.currentEncoded ? currentStep.currentEncoded.slice(0, currentStep.currentEncoded.lastIndexOf(currentStep.outputChunk || "xyz")) : ""}</span>
                {currentStep.outputChunk && (
@@ -410,8 +410,6 @@ const App = () => {
   // テキストモードの状態
   const [inputText, setInputText] = useState("AAAAABBBCCCCC");
   const [compressionResult, setCompressionResult] = useState(null);
-  const [decodeInput, setDecodeInput] = useState("");
-  const [decodeResult, setDecodeResult] = useState("");
   const [compareData, setCompareData] = useState([]);
   
   // 画像モードの状態 (8x8)
@@ -428,8 +426,6 @@ const App = () => {
   // 入力が変わったら結果をリセット
   useEffect(() => {
     setCompressionResult(null);
-    setDecodeInput("");
-    setDecodeResult("");
     setCompareData([]);
   }, [inputText, algo]);
   
@@ -447,26 +443,6 @@ const App = () => {
     else if (algo === "lzw") res = logic.lzw.encode(inputText);
 
     setCompressionResult(res);
-    setDecodeInput(res.encoded);
-    setDecodeResult("");
-  };
-
-  const handleDecompress = () => {
-    if (!decodeInput) return;
-    let res = "";
-
-    if (algo === "rle") {
-      res = logic.rle.decode(decodeInput);
-    } else if (algo === "huffman") {
-      if (compressionResult && compressionResult.serializedMap) {
-        res = logic.huffman.decode(decodeInput, compressionResult.serializedMap);
-      } else {
-        res = "エラー: ハフマン符号化の復元には辞書データが必要です。先に「圧縮」を行ってください。";
-      }
-    } else if (algo === "lzw") {
-      res = logic.lzw.decode(decodeInput);
-    }
-    setDecodeResult(res);
   };
 
   const handleCompare = () => {
@@ -531,8 +507,7 @@ const App = () => {
         </div>
 
         {activeTab === 'text' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
+          <div className="space-y-6 max-w-4xl mx-auto">
               <Card title="1. 入力とアルゴリズム選択">
                 <div className="space-y-4">
                   <div>
@@ -624,38 +599,8 @@ const App = () => {
                    <SimpleBarChart data={compareData} />
                 </Card>
               )}
-            </div>
 
-            <div className="space-y-6">
-              <Card title="3. 復元の確認">
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm text-gray-600 mb-1">圧縮データ入力</label>
-                    <textarea 
-                      value={decodeInput}
-                      onChange={(e) => setDecodeInput(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded text-sm font-mono h-24 resize-none focus:ring-2 focus:ring-green-500 outline-none"
-                    />
-                  </div>
-                  <Button onClick={handleDecompress} variant="success" className="w-full">
-                    復元を実行
-                  </Button>
-                  
-                  {decodeResult && (
-                    <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded">
-                      <div className="text-xs text-green-700 font-bold mb-1">復元結果:</div>
-                      <div className="font-mono text-lg break-all">{decodeResult}</div>
-                      {decodeResult === inputText && (
-                        <div className="text-xs text-green-600 mt-1 flex items-center">
-                          <span className="mr-1">✓</span> 元通りに戻りました
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </Card>
-
-              <Card title="アルゴリズムの特徴">
+              <Card title="アルゴリズムの特徴・詳細">
                  <div className="text-sm space-y-3">
                    <div>
                      <span className="block font-bold text-gray-700">得意なデータ</span>
@@ -667,8 +612,6 @@ const App = () => {
                    </div>
                  </div>
               </Card>
-            </div>
-
           </div>
         )}
 
@@ -718,7 +661,7 @@ const App = () => {
                      </div>
                      <div>
                        <div className="text-sm font-bold text-indigo-700">RLE圧縮データ:</div>
-                       <div className="text-lg font-mono bg-indigo-50 p-2 rounded break-all text-indigo-700 font-bold border border-indigo-200">
+                       <div className="text-lg font-mono bg-indigo-50 p-2 rounded break-all whitespace-pre-wrap text-indigo-700 font-bold border border-indigo-200">
                          {imgResult.encoded}
                        </div>
                        <div className="text-xs text-gray-500 mt-1">※「色(0/1) + 連続数」の形式</div>
